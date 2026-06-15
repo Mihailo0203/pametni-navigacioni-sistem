@@ -152,3 +152,93 @@ class GreedySearch(Search):
         min_state = min(states, key=lambda x: x.get_cost_estimate())
         states.remove(min_state)
         return min_state
+    
+class BidirectionalAStar(Search):
+    def select_state(self, states):
+        pass # Ovu metodu ne koristimo jer imamo dve odvojene liste (napred i nazad)
+
+    def search(self, initial_state):
+        # 1. INICIJALIZACIJA PRETRAGE NAPRED (Od starta ka cilju)
+        forward_states = [initial_state]
+        forward_visited = {initial_state.unique_hash(): initial_state}
+        
+        # 2. INICIJALIZACIJA PRETRAGE NAZAD (Od cilja ka startu)
+        # Pravimo "obrnuto" pocetno stanje
+        goal_state = initial_state.__class__(
+            graph=initial_state.graph, 
+            parent=None, 
+            current_node=initial_state.goal_node, 
+            goal_node=initial_state.current_node, 
+            edge_cost=0
+        )
+        backward_states = [goal_state]
+        backward_visited = {goal_state.unique_hash(): goal_state}
+        
+        processed_list = []
+        
+        # Dok god imamo cvorove za obilazak u obe liste
+        while forward_states and backward_states:
+            # --- KORAK NAPRED (A*) ---
+            current_forward = min(forward_states, key=lambda x: x.get_current_cost() + x.get_cost_estimate())
+            forward_states.remove(current_forward)
+            processed_list.append(current_forward)
+            
+            # Ako smo se sudarili sa pretragom nazad, spajamo putanje!
+            if current_forward.unique_hash() in backward_visited:
+                return self._reconstruct_bidirectional_path(current_forward, backward_visited[current_forward.unique_hash()]), processed_list, []
+                
+            for next_state in current_forward.get_next_states():
+                hash_val = next_state.unique_hash()
+                if hash_val not in forward_visited or forward_visited[hash_val].get_current_cost() > next_state.get_current_cost():
+                    forward_visited[hash_val] = next_state
+                    forward_states.append(next_state)
+            
+            # --- KORAK NAZAD (A*) ---
+            current_backward = min(backward_states, key=lambda x: x.get_cost_estimate()) # Heuristika nazad
+            backward_states.remove(current_backward)
+            processed_list.append(current_backward)
+            
+            # Ako smo se sudarili sa pretragom napred, spajamo putanje!
+            if current_backward.unique_hash() in forward_visited:
+                return self._reconstruct_bidirectional_path(forward_visited[current_backward.unique_hash()], current_backward), processed_list, []
+                
+            # ZA NAZAD: Trazimo prethodnike (predecessors) zbog jednosmernih ulica
+            for predecessor in initial_state.graph.predecessors(current_backward.current_node):
+                edge_data = initial_state.graph[predecessor][current_backward.current_node][0]
+                length = edge_data.get('length', 0)
+                
+                new_back_state = initial_state.__class__(
+                    graph=initial_state.graph,
+                    parent=current_backward,
+                    current_node=predecessor,
+                    goal_node=initial_state.current_node,
+                    edge_cost=length
+                )
+                
+                hash_val = new_back_state.unique_hash()
+                if hash_val not in backward_visited or backward_visited[hash_val].get_current_cost() > new_back_state.get_current_cost():
+                    backward_visited[hash_val] = new_back_state
+                    backward_states.append(new_back_state)
+                    
+        return None, processed_list, []
+
+    def _reconstruct_bidirectional_path(self, forward_state, backward_state):
+        """
+        Spaja listu cvorova od starta do tacke sudara, 
+        i od tacke sudara do cilja.
+        """
+        path_forward = []
+        curr = forward_state
+        while curr is not None:
+            path_forward.append(curr.current_node)
+            curr = curr.parent
+        path_forward = list(reversed(path_forward))
+        
+        path_backward = []
+        # Krecemo od roditelja da ne bismo duplirali tacku sudara
+        curr = backward_state.parent
+        while curr is not None:
+            path_backward.append(curr.current_node)
+            curr = curr.parent
+            
+        return path_forward + path_backward
