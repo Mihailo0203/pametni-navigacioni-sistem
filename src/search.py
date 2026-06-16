@@ -155,15 +155,12 @@ class GreedySearch(Search):
     
 class BidirectionalAStar(Search):
     def select_state(self, states):
-        pass # Ovu metodu ne koristimo jer imamo dve odvojene liste (napred i nazad)
+        pass # Ne koristimo
 
     def search(self, initial_state):
-        # 1. INICIJALIZACIJA PRETRAGE NAPRED (Od starta ka cilju)
         forward_states = [initial_state]
         forward_visited = {initial_state.unique_hash(): initial_state}
         
-        # 2. INICIJALIZACIJA PRETRAGE NAZAD (Od cilja ka startu)
-        # Pravimo "obrnuto" pocetno stanje
         goal_state = initial_state.__class__(
             graph=initial_state.graph, 
             parent=None, 
@@ -176,57 +173,87 @@ class BidirectionalAStar(Search):
         
         processed_list = []
         
-        # Dok god imamo cvorove za obilazak u obe liste
+        # Inicijalizujemo najkraći put na "beskonačno"
+        best_cost = float('inf')
+        best_collision_fwd = None
+        best_collision_bwd = None
+        
         while forward_states and backward_states:
-            # --- KORAK NAPRED (A*) ---
+            # Uvek biramo čvor sa najmanjom f = g + h vrednošću
             current_forward = min(forward_states, key=lambda x: x.get_current_cost() + x.get_cost_estimate())
-            forward_states.remove(current_forward)
-            processed_list.append(current_forward)
+            current_backward = min(backward_states, key=lambda x: x.get_current_cost() + x.get_cost_estimate())
             
-            # Ako smo se sudarili sa pretragom nazad, spajamo putanje!
-            if current_forward.unique_hash() in backward_visited:
-                return self._reconstruct_bidirectional_path(current_forward, backward_visited[current_forward.unique_hash()]), processed_list, []
-                
-            for next_state in current_forward.get_next_states():
-                hash_val = next_state.unique_hash()
-                if hash_val not in forward_visited or forward_visited[hash_val].get_current_cost() > next_state.get_current_cost():
-                    forward_visited[hash_val] = next_state
-                    forward_states.append(next_state)
+            f_forward = current_forward.get_current_cost() + current_forward.get_cost_estimate()
+            f_backward = current_backward.get_current_cost() + current_backward.get_cost_estimate()
             
-            # --- KORAK NAZAD (A*) ---
-            current_backward = min(backward_states, key=lambda x: x.get_cost_estimate()) # Heuristika nazad
-            backward_states.remove(current_backward)
-            processed_list.append(current_backward)
-            
-            # Ako smo se sudarili sa pretragom napred, spajamo putanje!
-            if current_backward.unique_hash() in forward_visited:
-                return self._reconstruct_bidirectional_path(forward_visited[current_backward.unique_hash()], current_backward), processed_list, []
+            # USLOV ZA KRAJ: Ako najmanja procenjena cena u oba reda premašuje 
+            # trenutno najbolji pronađen put, garantovano nema kraćeg puta!
+            if f_forward >= best_cost and f_backward >= best_cost:
+                break
                 
-            # ZA NAZAD: Trazimo prethodnike (predecessors) zbog jednosmernih ulica
-            for predecessor in initial_state.graph.predecessors(current_backward.current_node):
-                edge_data = initial_state.graph[predecessor][current_backward.current_node][0]
-                length = edge_data.get('length', 0)
+            # --- KORAK NAPRED ---
+            if f_forward < best_cost:
+                forward_states.remove(current_forward)
+                processed_list.append(current_forward)
                 
-                new_back_state = initial_state.__class__(
-                    graph=initial_state.graph,
-                    parent=current_backward,
-                    current_node=predecessor,
-                    goal_node=initial_state.current_node,
-                    edge_cost=length
-                )
+                # Provera sudara
+                hash_fwd = current_forward.unique_hash()
+                if hash_fwd in backward_visited:
+                    total_cost = current_forward.get_current_cost() + backward_visited[hash_fwd].get_current_cost()
+                    # Ažuriramo ako smo našli bolju prečicu
+                    if total_cost < best_cost:
+                        best_cost = total_cost
+                        best_collision_fwd = current_forward
+                        best_collision_bwd = backward_visited[hash_fwd]
+                        
+                for next_state in current_forward.get_next_states():
+                    hash_val = next_state.unique_hash()
+                    if hash_val not in forward_visited or forward_visited[hash_val].get_current_cost() > next_state.get_current_cost():
+                        forward_visited[hash_val] = next_state
+                        forward_states.append(next_state)
+            else:
+                forward_states.remove(current_forward)
                 
-                hash_val = new_back_state.unique_hash()
-                if hash_val not in backward_visited or backward_visited[hash_val].get_current_cost() > new_back_state.get_current_cost():
-                    backward_visited[hash_val] = new_back_state
-                    backward_states.append(new_back_state)
+            # --- KORAK NAZAD ---
+            if f_backward < best_cost:
+                backward_states.remove(current_backward)
+                processed_list.append(current_backward)
+                
+                # Provera sudara
+                hash_bwd = current_backward.unique_hash()
+                if hash_bwd in forward_visited:
+                    total_cost = current_backward.get_current_cost() + forward_visited[hash_bwd].get_current_cost()
+                    if total_cost < best_cost:
+                        best_cost = total_cost
+                        best_collision_bwd = current_backward
+                        best_collision_fwd = forward_visited[hash_bwd]
+                        
+                for predecessor in initial_state.graph.predecessors(current_backward.current_node):
+                    edge_data = initial_state.graph[predecessor][current_backward.current_node][0]
+                    length = edge_data.get('length', 0)
                     
+                    new_back_state = initial_state.__class__(
+                        graph=initial_state.graph,
+                        parent=current_backward,
+                        current_node=predecessor,
+                        goal_node=initial_state.current_node,
+                        edge_cost=length
+                    )
+                    
+                    hash_val = new_back_state.unique_hash()
+                    if hash_val not in backward_visited or backward_visited[hash_val].get_current_cost() > new_back_state.get_current_cost():
+                        backward_visited[hash_val] = new_back_state
+                        backward_states.append(new_back_state)
+            else:
+                backward_states.remove(current_backward)
+                
+        # Spajanje savršene putanje na kraju
+        if best_collision_fwd and best_collision_bwd:
+            return self._reconstruct_bidirectional_path(best_collision_fwd, best_collision_bwd), processed_list, []
+            
         return None, processed_list, []
 
     def _reconstruct_bidirectional_path(self, forward_state, backward_state):
-        """
-        Spaja listu cvorova od starta do tacke sudara, 
-        i od tacke sudara do cilja.
-        """
         path_forward = []
         curr = forward_state
         while curr is not None:
@@ -235,7 +262,6 @@ class BidirectionalAStar(Search):
         path_forward = list(reversed(path_forward))
         
         path_backward = []
-        # Krecemo od roditelja da ne bismo duplirali tacku sudara
         curr = backward_state.parent
         while curr is not None:
             path_backward.append(curr.current_node)
