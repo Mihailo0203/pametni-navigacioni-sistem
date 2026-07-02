@@ -12,7 +12,7 @@ class State(ABC):
         self.current_node = current_node  # ID trenutnog cvora (raskrsnice)
         self.goal_node = goal_node  # ID ciljnog cvora (mesto nesrece)
         
-        # Povecavamo dubinu/nivo pretrage bas kao na vezbama
+        # Povecavamo dubinu/nivo pretrage 
         self.depth = parent.depth + 1 if parent is not None else 1
 
     @abstractmethod
