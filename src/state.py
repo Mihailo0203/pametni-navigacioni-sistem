@@ -2,10 +2,7 @@ from abc import ABC, abstractmethod
 import math
 
 class State(ABC):
-    """
-    Apstraktna klasa koja opisuje stanje pretrage na mapi.
-    Prilagodjena arhitekturi sa vezbi, ali umesto table koristi graf.
-    """
+    
     def __init__(self, graph, parent=None, current_node=None, goal_node=None):
         self.graph = graph  # Reference na networkx graf mape
         self.parent = parent  # Roditeljsko stanje
@@ -37,9 +34,7 @@ class State(ABC):
 
 
 class MapNodeState(State):
-    """
-    Konkretna klasa koja implementira stanje pretrage za navigaciju hitne pomoci.
-    """
+    
     def __init__(self, graph, parent=None, current_node=None, goal_node=None, edge_cost=0):
         super().__init__(graph, parent, current_node, goal_node)
         
@@ -50,9 +45,7 @@ class MapNodeState(State):
             self.cost = parent.cost + edge_cost
 
     def get_next_states(self):
-        """
-        Dobavlja sva moguca sledeca stanja na osnovu susednih cvorova u usmerenom grafu.
-        """
+        
         next_states = []
         
         # Prolazimo kroz sve naslednike (susede) trenutnog cvora u usmerenom grafu
@@ -76,50 +69,35 @@ class MapNodeState(State):
         return next_states
 
     def is_final_state(self):
-        """
-        Proverava da li smo stigli do mesta nesrece.
-        """
+       
         return self.current_node == self.goal_node
 
     def unique_hash(self):
-        """
-        Vraca jedinstveni identifikator stanja (ID cvora kao string) radi brze pretrage u setovima.
-        """
+       
         return str(self.current_node)
 
     def get_current_cost(self):
-        """
-        Vraca stvarnu dosadasnju cenu puta g(n) u metrima.
-        """
+       
         return self.cost
 
     def get_cost_estimate(self):
-        """
-        Implementacija Haversine formule za racunanje vazdusne udaljenosti izmedju 
-        trenutnog cvora i cilja. Predstavlja heuristiku h(n).
-        """
-        # Izvlacenje geografskih koordinata iz grafa za trenutni cvor
+       
         curr_lat = self.graph.nodes[self.current_node]['y']
         curr_lon = self.graph.nodes[self.current_node]['x']
         
-        # Izvlacenje geografskih koordinata za ciljni cvor
         goal_lat = self.graph.nodes[self.goal_node]['y']
         goal_lon = self.graph.nodes[self.goal_node]['x']
         
-        # Poluprecnik Zemlje u metrima
         R = 6371000.0
         
-        # Konverzija stepeni u radijane
         phi1 = math.radians(curr_lat)
         phi2 = math.radians(goal_lat)
         delta_phi = math.radians(goal_lat - curr_lat)
         delta_lambda = math.radians(goal_lon - curr_lon)
         
-        # Haversine formula
         a = math.sin(delta_phi / 2)**2 + math.cos(phi1) * math.cos(phi2) * math.sin(delta_lambda / 2)**2
         c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
         
-        # Vazdusna udaljenost u metrima
         distance = R * c
         return distance
 

@@ -2,9 +2,7 @@ from collections import deque
 from abc import ABC, abstractmethod
 
 class Search(ABC):
-    """
-    Apstraktna klasa za pretragu na mapi grada.
-    """
+    
     def search(self, initial_state):
         """
         Glavna petlja za pretragu prostora stanja.
@@ -96,7 +94,7 @@ class AStarSearch(Search):
     
 class IterativeDeepeningAStar(Search):
     def select_state(self, states):
-        pass # Ову методу не користимо јер мењамо целу search логику
+        pass 
 
     def search(self, initial_state):
         # Почетна граница (bound) је хеуристика почетног чвора
@@ -148,14 +146,13 @@ class IterativeDeepeningAStar(Search):
 
 class GreedySearch(Search):
     def select_state(self, states):
-        # Pohlepna pretraga gleda SAMO heuristiku h(n), ignoriše g(n)
         min_state = min(states, key=lambda x: x.get_cost_estimate())
         states.remove(min_state)
         return min_state
     
 class BidirectionalAStar(Search):
     def select_state(self, states):
-        pass # Ne koristimo
+        pass 
 
     def search(self, initial_state):
         forward_states = [initial_state]
